@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bản vẽ CAD OCR & Vector PDF - V28</title>
+  
+  <!-- Thư viện tạo PDF và nén ZIP -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+  <style>
+    :root {
+      --primary: #9333ea;
+      --primary-hover: #7e22ce;
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .container {
+      background: var(--card-bg);
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      width: 100%;
+      max-width: 600px;
+      border: 1px solid #334155;
+    }
+
+    h1 {
+      font-size: 20px;
+      margin-bottom: 20px;
+      color: #c084fc;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+
+    label {
+      display: block;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+
+    input[type="text"], input[type="file"] {
+      width: 100%;
+      padding: 10px;
+      background: #0f172a;
+      border: 1px solid #475569;
+      border-radius: 6px;
+      color: #fff;
+      font-size: 13px;
+    }
+
+    input[type="file"] {
+      cursor: pointer;
+    }
+
+    .btn-run {
+      width: 100%;
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 12px;
+      font-size: 15px;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s;
+      margin-top: 10px;
+    }
+
+    .btn-run:hover {
+      background: var(--primary-hover);
+    }
+
+    .btn-run:disabled {
+      background: #475569;
+      cursor: not-allowed;
+    }
+
+    /* CSS Cho khung Toast nổi góc dưới phải */
+    #v28-toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 999999;
+      display: flex;
+      flex-direction: column-reverse;
+      gap: 10px;
+      pointer-events: none;
+    }
+
+    .v28-toast-card {
+      pointer-events: auto;
+      background: #181824;
+      color: #e2e8f0;
+      border-radius: 8px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.7);
+      padding: 12px 14px;
+      width: 320px;
+      transition: all 0.3s ease;
+      animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes slideInRight {
+      from {
+        opacity: 0;
+        transform: translateX(100px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    .v28-toast-card button:hover {
+      filter: brightness(1.2);
+    }
+
+    .v28-toast-card button:active {
+      transform: scale(0.96);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>⚡ Bản vẽ CAD V28 (AutoCAD PDF Overlay)</h1>
+    
+    <div class="form-group">
+      <label for="apiKey">Gemini API Key (hoặc Vision API):</label>
+      <input type="text" id="apiKey" placeholder="Nhập API Key của bạn...">
+    </div>
+
+    <div class="form-group">
+      <label for="fileInput">Chọn danh sách ảnh bản vẽ CAD (Hỗ trợ chọn nhiều file):</label>
+      <input type="file" id="fileInput" multiple accept="image/*">
+    </div>
+
+    <button id="btnProcess" class="btn-run">Bắt đầu xử lý hàng loạt</button>
+  </div>
+
+  <!-- Vùng chứa Toast Thông báo góc phải màn hình -->
+  <div id="v28-toast-container"></div>
+
+  <script>
+    /**
+     * V28 NOTIFICATION & DOWNLOAD MANAGER
+     */
+    class V28NotificationManager {
+      constructor() {
+        this.container = document.getElementById("v28-toast-container");
+        this.initSystemNotification();
+      }
+
+      async initSystemNotification() {
+        if ("Notification" in window && Notification.permission === "default") {
+          await Notification.requestPermission();
+        }
+      }
+
+      // Thông báo hoàn tất: có chữ hoặc không có chữ
+      notifyFinished({ current, total, fileName, hasText, textCount, zipBlob, pdfBlob, txtBlob, imgBlob }) {
+        const statusText = hasText ? `(có chữ: ${textCount})` : `(ko chữ)`;
+        const title = `Ảnh ${current}/${total} hoàn tất ${statusText}`;
+        const desc = hasText 
+          ? `Đã tạo xong PDF vector chữ tím cho ${fileName}.` 
+          : `Cảnh báo: Không tìm thấy text trên bản vẽ ${fileName}!`;
+
+        // Bắn Notification chuẩn hệ thống
+        if ("Notification" in window && Notification.permission === "granted") {
+          const notif = new Notification(title, {
+            body: desc,
+            icon: hasText ? "https://cdn-icons-png.flaticon.com/512/337/337946.png" : "https://cdn-icons-png.flaticon.com/512/564/564619.png"
+          });
+
+          if (hasText && zipBlob) {
+            notif.onclick = () => {
+              window.focus();
+              this.saveFile(zipBlob, `${fileName}_bundle.zip`, "application/zip");
+            };
+          }
+        }
+
+        // Bắn Floating Toast góc phải
+        this.renderToast({
+          type: hasText ? "success" : "warning",
+          title: `⚡ ${title}`,
+          message: `📄 ${fileName}`,
+          hasText,
+          current,
+          fileName,
+          zipBlob,
+          pdfBlob,
+          txtBlob,
+          imgBlob
+        });
+      }
+
+      // Thông báo lỗi F12 ngắn gọn
+      notifyError({ current, total, fileName, error }) {
+        let shortMsg = "Lỗi xử lý không xác định";
+        const errStr = (typeof error === "string" ? error : (error.message || JSON.stringify(error))).toLowerCase();
+
+        if (errStr.includes("429") || errStr.includes("resource_exhausted")) {
+          if (errStr.includes("quota") || errStr.includes("exceeded")) {
+            shortMsg = "Hết hạn ngạch API (Hết lượt/Quota)!";
+          } else {
+            shortMsg = "Google đang quá tải (API vẫn còn, chờ vài giây)!";
+          }
+        } else if (errStr.includes("503") || errStr.includes("500") || errStr.includes("overloaded")) {
+          shortMsg = "Máy chủ Google đang bị nghẽn/quá tải!";
+        } else if (errStr.includes("api_key") || errStr.includes("unauthenticated") || errStr.includes("403")) {
+          shortMsg = "Sai hoặc hỏng API Key! Hãy kiểm tra lại.";
+        } else if (errStr.includes("network") || errStr.includes("failed to fetch")) {
+          shortMsg = "Mất kết nối mạng / Không tải được ảnh!";
+        }
+
+        const title = `Lỗi ảnh ${current}/${total}`;
+
+        if ("Notification" in window && Notification.permission === "granted") {
+          new Notification(`❌ ${title}`, {
+            body: `${shortMsg} (${fileName})`,
+            icon: "https://cdn-icons-png.flaticon.com/512/463/463612.png"
+          });
+        }
+
+        this.renderToast({
+          type: "error",
+          title: `❌ ${title}: Thất bại`,
+          message: `${shortMsg} (${fileName})`,
+          hasText: false
+        });
+      }
+
+      renderToast(opts) {
+        const toast = document.createElement("div");
+        toast.className = "v28-toast-card";
+        
+        let borderColor = "#9333ea";
+        let titleColor = "#c084fc";
+        if (opts.type === "warning") {
+          borderColor = "#eab308";
+          titleColor = "#fde047";
+        } else if (opts.type === "error") {
+          borderColor = "#ef4444";
+          titleColor = "#f87171";
+        }
+
+        toast.style.border = `1px solid ${borderColor}`;
+        toast.style.borderLeft = `5px solid ${borderColor}`;
+
+        let html = `
+          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px;">
+            <span style="font-size: 12px; font-weight: bold; color: ${titleColor}; line-height: 1.4;">
+              ${opts.title}
+            </span>
+            <button class="v28-close" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 13px;">✕</button>
+          </div>
+          <div style="font-size: 11px; color: #94a3b8; line-height: 1.4; margin-bottom: ${opts.hasText ? '8px' : '0'}; word-break: break-all;">
+            ${opts.message}
+          </div>
+        `;
+
+        if (opts.hasText) {
+          html += `
+            <div style="display: flex; gap: 4px; margin-top: 6px;">
+              <button id="btn-zip-${opts.current}" style="flex: 2; background: #9333ea; color: #fff; border: none; border-radius: 4px; padding: 4px 6px; font-size: 11px; font-weight: 600; cursor: pointer;">
+                📦 All (ZIP)
+              </button>
+              <button id="btn-pdf-${opts.current}" style="flex: 1; background: #27273a; color: #e2e8f0; border: 1px solid #4b5563; border-radius: 4px; padding: 4px; font-size: 10px; cursor: pointer;">
+                PDF
+              </button>
+              <button id="btn-txt-${opts.current}" style="flex: 1; background: #27273a; color: #e2e8f0; border: 1px solid #4b5563; border-radius: 4px; padding: 4px; font-size: 10px; cursor: pointer;">
+                TXT
+              </button>
+              <button id="btn-img-${opts.current}" style="flex: 1; background: #27273a; color: #e2e8f0; border: 1px solid #4b5563; border-radius: 4px; padding: 4px; font-size: 10px; cursor: pointer;">
+                Ảnh
+              </button>
+            </div>
+          `;
+        }
+
+        toast.innerHTML = html;
+        this.container.appendChild(toast);
+
+        if (opts.hasText) {
+          toast.querySelector(`#btn-zip-${opts.current}`).onclick = () => this.saveFile(opts.zipBlob, `${opts.fileName}_bundle.zip`, "application/zip");
+          toast.querySelector(`#btn-pdf-${opts.current}`).onclick = () => this.saveFile(opts.pdfBlob, `${opts.fileName}_vector.pdf`, "application/pdf");
+          toast.querySelector(`#btn-txt-${opts.current}`).onclick = () => this.saveFile(opts.txtBlob, `${opts.fileName}_text.txt`, "text/plain");
+          toast.querySelector(`#btn-img-${opts.current}`).onclick = () => this.saveFile(opts.imgBlob, `${opts.fileName}_base.png`, "image/png");
+        }
+
+        toast.querySelector(".v28-close").onclick = () => {
+          toast.style.opacity = "0";
+          setTimeout(() => toast.remove(), 250);
+        };
+
+        const timeout = opts.type === "error" ? 15000 : 10000;
+        setTimeout(() => {
+          if (toast.parentElement) {
+            toast.style.opacity = "0";
+            setTimeout(() => toast.remove(), 250);
+          }
+        }, timeout);
+      }
+
+      async saveFile(blob, defaultName, mimeType) {
+        if (!blob) return alert("Không có dữ liệu file!");
+
+        if ("showSaveFilePicker" in window) {
+          try {
+            const ext = defaultName.split(".").pop();
+            const handle = await window.showSaveFilePicker({
+              suggestedName: defaultName,
+              types: [{ description: "Tệp xuất CAD", accept: { [mimeType]: [`.${ext}`] } }]
+            });
+            const writable = await handle.createWritable();
+            await writable.write(blob);
+            await writable.close();
+            return;
+          } catch (err) {
+            if (err.name === "AbortError") return;
+          }
+        }
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = defaultName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 2000);
+      }
+    }
+
+    const v28 = new V28NotificationManager();
+
+    // Giả lập đọc ảnh và tạo file thật (jsPDF + JSZip)
+    document.getElementById("btnProcess").onclick = async () => {
+      const files = document.getElementById("fileInput").files;
+      const apiKey = document.getElementById("apiKey").value.trim();
+
+      if (files.length === 0) {
+        alert("Vui lòng chọn ít nhất 1 ảnh bản vẽ!");
+        return;
+      }
+
+      const btn = document.getElementById("btnProcess");
+      btn.disabled = true;
+      btn.innerText = "Đang xử lý...";
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        try {
+          // Bắt lỗi nếu thiếu API Key
+          if (!apiKey) {
+            throw new Error("api_key_invalid: Vui lòng nhập API Key hợp lệ!");
+          }
+
+          // Giả lập đọc file ảnh sang Data URL
+          const imgData = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.readAsDataURL(file);
+          });
+
+          // Lấy kích thước thật của ảnh
+          const imgObj = new Image();
+          await new Promise((resolve) => {
+            imgObj.onload = resolve;
+            imgObj.src = imgData;
+          });
+          const realW = imgObj.naturalWidth || 1200;
+          const realH = imgObj.naturalHeight || 800;
+
+          // Giả lập nhận diện chữ: Ảnh số chẵn coi như có chữ, số lẻ ko có chữ để test
+          const hasText = (i % 2 === 0);
+          const detectedItems = hasText 
+            ? [{ text: "PLC PANEL", x: 100, y: 150 }, { text: "SPARE", x: 200, y: 300 }] 
+            : [];
+
+          // Khởi tạo PDF bằng jsPDF
+          const { jsPDF } = window.jspdf;
+          const doc = new jsPDF({
+            orientation: realW > realH ? "l" : "p",
+            unit: "px",
+            format: [realW, realH]
+          });
+
+          // Vẽ ảnh nền
+          doc.addImage(imgData, "PNG", 0, 0, realW, realH);
+
+          // Vẽ chữ màu tím #9333ea nếu có chữ
+          if (hasText) {
+            doc.setTextColor(147, 51, 234); // Màu tím RGB
+            doc.setFont("Helvetica", "bold");
+            doc.setFontSize(14);
+            detectedItems.forEach(item => {
+              doc.text(item.text, item.x, item.y);
+            });
+          }
+
+          const pdfBlob = doc.output("blob");
+          const txtBlob = new Blob([detectedItems.map(d => d.text).join("\n")], { type: "text/plain;charset=utf-8" });
+          const imgBlob = file;
+
+          // Đóng gói All (ZIP)
+          const zip = new JSZip();
+          zip.file(`${file.name}.pdf`, pdfBlob);
+          zip.file(`${file.name}.txt`, txtBlob);
+          zip.file(file.name, imgBlob);
+          const zipBlob = await zip.generateAsync({ type: "blob" });
+
+          // Bắn thông báo hoàn tất
+          v28.notifyFinished({
+            current: i + 1,
+            total: files.length,
+            fileName: file.name,
+            hasText: hasText,
+            textCount: detectedItems.length,
+            zipBlob: zipBlob,
+            pdfBlob: pdfBlob,
+            txtBlob: txtBlob,
+            imgBlob: imgBlob
+          });
+
+        } catch (err) {
+          console.error("F12 Error Log:", err);
+          v28.notifyError({
+            current: i + 1,
+            total: files.length,
+            fileName: file.name,
+            error: err
+          });
+        }
+      }
+
+      btn.disabled = false;
+      btn.innerText = "Bắt đầu xử lý hàng loạt";
+    };
+  </script>
+</body>
+</html>
