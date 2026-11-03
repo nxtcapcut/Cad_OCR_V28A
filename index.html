@@ -1,470 +1,210 @@
 <!DOCTYPE html>
-<html lang="vi">
+<html lang="vi" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bản vẽ CAD OCR & Vector PDF - V28</title>
-  
-  <!-- Thư viện tạo PDF và nén ZIP -->
+  <title>CAD Batch OCR & PDF Overlay - v28.0</title>
+
+  <!-- ==================== 1. THƯ VIỆN NẠP TRONG <HEAD> ==================== -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              purple: '#7c3aed',
+              amber: '#f59e0b',
+              accent: '#8b5cf6'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
   <style>
-    :root {
-      --primary: #9333ea;
-      --primary-hover: #7e22ce;
-      --bg: #0f172a;
-      --card-bg: #1e293b;
-      --text: #f8fafc;
-      --text-muted: #94a3b8;
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background-color: var(--bg);
-      color: var(--text);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      min-height: 100vh;
-      padding: 20px;
-    }
-
-    .container {
-      background: var(--card-bg);
-      padding: 30px;
-      border-radius: 12px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-      width: 100%;
-      max-width: 600px;
-      border: 1px solid #334155;
-    }
-
-    h1 {
-      font-size: 20px;
-      margin-bottom: 20px;
-      color: #c084fc;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .form-group {
-      margin-bottom: 15px;
-    }
-
-    label {
-      display: block;
-      font-size: 13px;
-      color: var(--text-muted);
-      margin-bottom: 6px;
-    }
-
-    input[type="text"], input[type="file"] {
-      width: 100%;
-      padding: 10px;
-      background: #0f172a;
-      border: 1px solid #475569;
-      border-radius: 6px;
-      color: #fff;
-      font-size: 13px;
-    }
-
-    input[type="file"] {
-      cursor: pointer;
-    }
-
-    .btn-run {
-      width: 100%;
-      background: var(--primary);
-      color: white;
-      border: none;
-      padding: 12px;
-      font-size: 15px;
-      font-weight: 600;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: background 0.2s;
-      margin-top: 10px;
-    }
-
-    .btn-run:hover {
-      background: var(--primary-hover);
-    }
-
-    .btn-run:disabled {
-      background: #475569;
-      cursor: not-allowed;
-    }
-
-    /* CSS Cho khung Toast nổi góc dưới phải */
-    #v28-toast-container {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      z-index: 999999;
-      display: flex;
-      flex-direction: column-reverse;
-      gap: 10px;
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #090d16; }
+    ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #334155; }
+    .overlay-box {
+      position: absolute;
       pointer-events: none;
+      display: flex;
+      align-items: center;
+      line-height: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      font-weight: 600;
     }
-
-    .v28-toast-card {
-      pointer-events: auto;
-      background: #181824;
-      color: #e2e8f0;
-      border-radius: 8px;
-      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.7);
-      padding: 12px 14px;
-      width: 320px;
-      transition: all 0.3s ease;
-      animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    }
-
     @keyframes slideInRight {
-      from {
-        opacity: 0;
-        transform: translateX(100px);
-      }
-      to {
-        opacity: 1;
-        transform: translateX(0);
-      }
+      from { opacity: 0; transform: translateX(100px); }
+      to { opacity: 1; transform: translateX(0); }
     }
-
-    .v28-toast-card button:hover {
-      filter: brightness(1.2);
-    }
-
-    .v28-toast-card button:active {
-      transform: scale(0.96);
+    .v28-toast-card {
+      animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1);
     }
   </style>
 </head>
-<body>
 
-  <div class="container">
-    <h1>⚡ Bản vẽ CAD V28 (AutoCAD PDF Overlay)</h1>
-    
-    <div class="form-group">
-      <label for="apiKey">Gemini API Key (hoặc Vision API):</label>
-      <input type="text" id="apiKey" placeholder="Nhập API Key của bạn...">
-    </div>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-purple-600 selection:text-white">
 
-    <div class="form-group">
-      <label for="fileInput">Chọn danh sách ảnh bản vẽ CAD (Hỗ trợ chọn nhiều file):</label>
-      <input type="file" id="fileInput" multiple accept="image/*">
-    </div>
+  <!-- ==================== HEADER CỐ ĐỊNH ==================== -->
+  <header class="sticky top-0 z-50 bg-slate-900/90 backdrop-blur border-b border-slate-800 px-6 py-3">
+    <div class="max-w-[1700px] mx-auto flex flex-wrap items-center justify-between gap-4">
+      
+      <!-- Logo, Tên công cụ & Badge Version V28 TO RÕ -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-lg bg-gradient-to-tr from-purple-600 via-indigo-600 to-amber-500 flex items-center justify-center shadow-lg shadow-purple-950/40">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+            CAD Batch OCR & PDF Overlay
+            <!-- CHỮ V28 ĐƯỢC PHÓNG TO NỔI BẬT -->
+            <span class="px-3 py-1 rounded-md bg-gradient-to-r from-purple-600 to-amber-500 text-white font-mono font-black text-sm tracking-wider shadow-md shadow-purple-900/40 border border-purple-400/40 animate-pulse">v28.0</span>
+            <span class="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-purple-950 text-purple-300 border border-purple-800/60 font-mono">Gemini Flash</span>
+          </h1>
+          <p class="text-xs text-slate-400">Lớp chữ Vector & Khung tím nổi bật trên ảnh nền - Chuột bôi đen copy được chữ</p>
+        </div>
+      </div>
 
-    <button id="btnProcess" class="btn-run">Bắt đầu xử lý hàng loạt</button>
-  </div>
-
-  <!-- Vùng chứa Toast Thông báo góc phải màn hình -->
-  <div id="v28-toast-container"></div>
-
-  <script>
-    /**
-     * V28 NOTIFICATION & DOWNLOAD MANAGER
-     */
-    class V28NotificationManager {
-      constructor() {
-        this.container = document.getElementById("v28-toast-container");
-        this.initSystemNotification();
-      }
-
-      async initSystemNotification() {
-        if ("Notification" in window && Notification.permission === "default") {
-          await Notification.requestPermission();
-        }
-      }
-
-      // Thông báo hoàn tất: có chữ hoặc không có chữ
-      notifyFinished({ current, total, fileName, hasText, textCount, zipBlob, pdfBlob, txtBlob, imgBlob }) {
-        const statusText = hasText ? `(có chữ: ${textCount})` : `(ko chữ)`;
-        const title = `Ảnh ${current}/${total} hoàn tất ${statusText}`;
-        const desc = hasText 
-          ? `Đã tạo xong PDF vector chữ tím cho ${fileName}.` 
-          : `Cảnh báo: Không tìm thấy text trên bản vẽ ${fileName}!`;
-
-        // Bắn Notification chuẩn hệ thống
-        if ("Notification" in window && Notification.permission === "granted") {
-          const notif = new Notification(title, {
-            body: desc,
-            icon: hasText ? "https://cdn-icons-png.flaticon.com/512/337/337946.png" : "https://cdn-icons-png.flaticon.com/512/564/564619.png"
-          });
-
-          if (hasText && zipBlob) {
-            notif.onclick = () => {
-              window.focus();
-              this.saveFile(zipBlob, `${fileName}_bundle.zip`, "application/zip");
-            };
-          }
-        }
-
-        // Bắn Floating Toast góc phải
-        this.renderToast({
-          type: hasText ? "success" : "warning",
-          title: `⚡ ${title}`,
-          message: `📄 ${fileName}`,
-          hasText,
-          current,
-          fileName,
-          zipBlob,
-          pdfBlob,
-          txtBlob,
-          imgBlob
-        });
-      }
-
-      // Thông báo lỗi F12 ngắn gọn
-      notifyError({ current, total, fileName, error }) {
-        let shortMsg = "Lỗi xử lý không xác định";
-        const errStr = (typeof error === "string" ? error : (error.message || JSON.stringify(error))).toLowerCase();
-
-        if (errStr.includes("429") || errStr.includes("resource_exhausted")) {
-          if (errStr.includes("quota") || errStr.includes("exceeded")) {
-            shortMsg = "Hết hạn ngạch API (Hết lượt/Quota)!";
-          } else {
-            shortMsg = "Google đang quá tải (API vẫn còn, chờ vài giây)!";
-          }
-        } else if (errStr.includes("503") || errStr.includes("500") || errStr.includes("overloaded")) {
-          shortMsg = "Máy chủ Google đang bị nghẽn/quá tải!";
-        } else if (errStr.includes("api_key") || errStr.includes("unauthenticated") || errStr.includes("403")) {
-          shortMsg = "Sai hoặc hỏng API Key! Hãy kiểm tra lại.";
-        } else if (errStr.includes("network") || errStr.includes("failed to fetch")) {
-          shortMsg = "Mất kết nối mạng / Không tải được ảnh!";
-        }
-
-        const title = `Lỗi ảnh ${current}/${total}`;
-
-        if ("Notification" in window && Notification.permission === "granted") {
-          new Notification(`❌ ${title}`, {
-            body: `${shortMsg} (${fileName})`,
-            icon: "https://cdn-icons-png.flaticon.com/512/463/463612.png"
-          });
-        }
-
-        this.renderToast({
-          type: "error",
-          title: `❌ ${title}: Thất bại`,
-          message: `${shortMsg} (${fileName})`,
-          hasText: false
-        });
-      }
-
-      renderToast(opts) {
-        const toast = document.createElement("div");
-        toast.className = "v28-toast-card";
+      <!-- Khu vực Đường Dẫn & API Key -->
+      <div class="flex flex-wrap items-center gap-3">
         
-        let borderColor = "#9333ea";
-        let titleColor = "#c084fc";
-        if (opts.type === "warning") {
-          borderColor = "#eab308";
-          titleColor = "#fde047";
-        } else if (opts.type === "error") {
-          borderColor = "#ef4444";
-          titleColor = "#f87171";
-        }
-
-        toast.style.border = `1px solid ${borderColor}`;
-        toast.style.borderLeft = `5px solid ${borderColor}`;
-
-        let html = `
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px;">
-            <span style="font-size: 12px; font-weight: bold; color: ${titleColor}; line-height: 1.4;">
-              ${opts.title}
-            </span>
-            <button class="v28-close" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 13px;">✕</button>
+        <!-- Khung đường dẫn tải mặc định kèm nút Sửa gọn gàng -->
+        <div class="flex items-center gap-1.5 bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-lg text-xs">
+          <span class="text-slate-500 font-medium">Lưu tại:</span>
+          <span id="displaySavePath" class="text-purple-300 font-mono max-w-[220px] truncate" title="C:\Users\trung1.nguyenxuan\Desktop\V28\Test">
+            C:\Users\trung1.nguyenxuan\Desktop\V28\Test
+          </span>
+          <button id="btnEditPath" class="ml-1 text-[11px] text-amber-400 hover:text-amber-300 hover:underline font-medium">Sửa</button>
+          
+          <!-- Input đổi đường dẫn thủ công (ẩn ngầm, chỉ hiện khi ấn Sửa) -->
+          <div id="pathEditBox" class="hidden flex items-center gap-1 ml-1">
+            <input type="text" id="inputCustomPath" value="C:\Users\trung1.nguyenxuan\Desktop\V28\Test" class="bg-slate-900 border border-slate-700 px-1.5 py-0.5 rounded text-[11px] text-slate-200 w-48 font-mono focus:outline-none">
+            <button id="btnSaveCustomPath" class="px-2 py-0.5 bg-purple-600 hover:bg-purple-500 text-white rounded text-[11px]">OK</button>
           </div>
-          <div style="font-size: 11px; color: #94a3b8; line-height: 1.4; margin-bottom: ${opts.hasText ? '8px' : '0'}; word-break: break-all;">
-            ${opts.message}
+        </div>
+
+        <!-- Model Select -->
+        <div class="flex items-center gap-2 bg-slate-950 border border-slate-800 px-3 py-1.5 rounded-lg text-xs">
+          <label for="modelSelect" class="text-slate-400 font-medium">Model:</label>
+          <select id="modelSelect" class="bg-transparent text-purple-300 focus:outline-none cursor-pointer font-semibold">
+            <option value="gemini-2.5-flash" selected class="bg-slate-900 text-slate-100">gemini-2.5-flash (Khuyên dùng)</option>
+            <option value="gemini-1.5-flash" class="bg-slate-900 text-slate-100">gemini-1.5-flash</option>
+            <option value="gemini-2.0-flash" class="bg-slate-900 text-slate-100">gemini-2.0-flash</option>
+          </select>
+        </div>
+
+        <!-- API Key -->
+        <div class="relative flex items-center">
+          <input 
+            type="password" 
+            id="apiKeyInput" 
+            placeholder="Dán Gemini API Key tại đây..." 
+            class="w-56 bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 pr-9 text-xs focus:ring-1 focus:ring-purple-500 focus:border-purple-500 focus:outline-none transition-all placeholder:text-slate-600"
+          />
+          <button id="toggleApiKey" title="Ẩn/Hiện API Key" class="absolute right-2 text-slate-400 hover:text-white p-1">
+            <svg id="eyeIcon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- ==================== WORKSPACE CHÍNH (BỐ CỤC 2 CỘT V27) ==================== -->
+  <main class="max-w-[1700px] w-full mx-auto flex-1 grid grid-cols-12 gap-5 p-5">
+    
+    <!-- CỘT TRÁI: QUEUE & UPLOAD (4 CỘT) -->
+    <div class="col-span-12 lg:col-span-4 flex flex-col gap-4">
+      
+      <!-- Khung Kéo Thả File -->
+      <div 
+        id="dropZone" 
+        class="border-2 border-dashed border-slate-700 hover:border-purple-500/80 bg-slate-900/60 hover:bg-purple-950/10 rounded-xl p-6 text-center cursor-pointer transition-all duration-200 group"
+      >
+        <input type="file" id="fileInput" multiple accept="image/*" class="hidden" />
+        <div class="flex flex-col items-center justify-center gap-2 pointer-events-none">
+          <div class="w-12 h-12 rounded-full bg-slate-800 group-hover:bg-purple-600/20 text-purple-400 flex items-center justify-center transition-colors">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
           </div>
-        `;
+          <p class="text-sm font-semibold text-slate-200">Kéo & thả bản vẽ kỹ thuật vào đây</p>
+          <p class="text-xs text-slate-400">hoặc <span class="text-purple-400 underline underline-offset-2">bấm để chọn từ máy</span></p>
+          <span class="text-[11px] text-slate-500 font-mono mt-1">Hỗ trợ: PNG, JPG, JPEG, WEBP, BMP (Nhiều bản vẽ)</span>
+        </div>
+      </div>
 
-        if (opts.hasText) {
-          html += `
-            <div style="display: flex; gap: 4px; margin-top: 6px;">
-              <button id="btn-zip-${opts.current}" style="flex: 2; background: #9333ea; color: #fff; border: none; border-radius: 4px; padding: 4px 6px; font-size: 11px; font-weight: 600; cursor: pointer;">
-                📦 All (ZIP)
-              </button>
-              <button id="btn-pdf-${opts.current}" style="flex: 1; background: #27273a; color: #e2e8f0; border: 1px solid #4b5563; border-radius: 4px; padding: 4px; font-size: 10px; cursor: pointer;">
-                PDF
-              </button>
-              <button id="btn-txt-${opts.current}" style="flex: 1; background: #27273a; color: #e2e8f0; border: 1px solid #4b5563; border-radius: 4px; padding: 4px; font-size: 10px; cursor: pointer;">
-                TXT
-              </button>
-              <button id="btn-img-${opts.current}" style="flex: 1; background: #27273a; color: #e2e8f0; border: 1px solid #4b5563; border-radius: 4px; padding: 4px; font-size: 10px; cursor: pointer;">
-                Ảnh
-              </button>
-            </div>
-          `;
-        }
+      <!-- Bảng điều khiển tác vụ hàng loạt -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-3 flex flex-wrap gap-2">
+        <button id="btnStartOcr" class="flex-1 bg-purple-600 hover:bg-purple-500 text-white font-semibold text-xs py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 transition-all shadow-md shadow-purple-900/40 disabled:opacity-50 disabled:cursor-not-allowed">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+          <span>Bắt đầu OCR</span>
+        </button>
 
-        toast.innerHTML = html;
-        this.container.appendChild(toast);
+        <button id="btnDownloadAllZip" disabled class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-xs py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow" title="Tải trọn bộ 3 file mỗi bản vẽ">
+          <svg class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+          <span id="btnDownloadAllZipText">Tất cả (.ZIP)</span>
+        </button>
 
-        if (opts.hasText) {
-          toast.querySelector(`#btn-zip-${opts.current}`).onclick = () => this.saveFile(opts.zipBlob, `${opts.fileName}_bundle.zip`, "application/zip");
-          toast.querySelector(`#btn-pdf-${opts.current}`).onclick = () => this.saveFile(opts.pdfBlob, `${opts.fileName}_vector.pdf`, "application/pdf");
-          toast.querySelector(`#btn-txt-${opts.current}`).onclick = () => this.saveFile(opts.txtBlob, `${opts.fileName}_text.txt`, "text/plain");
-          toast.querySelector(`#btn-img-${opts.current}`).onclick = () => this.saveFile(opts.imgBlob, `${opts.fileName}_base.png`, "image/png");
-        }
+        <button id="btnDownloadPdfZip" disabled class="bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-xs py-2 px-3 rounded-lg flex items-center justify-center gap-1.5 transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow">
+          <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+          <span id="btnDownloadPdfZipText">PDF .ZIP</span>
+        </button>
+      </div>
 
-        toast.querySelector(".v28-close").onclick = () => {
-          toast.style.opacity = "0";
-          setTimeout(() => toast.remove(), 250);
-        };
+      <!-- Danh Sách Hàng Đợi (Queue List) -->
+      <div class="flex-1 bg-slate-900/80 border border-slate-800 rounded-xl flex flex-col overflow-hidden max-h-[calc(100vh-320px)]">
+        <div class="px-4 py-2.5 border-b border-slate-800 flex justify-between items-center bg-slate-900">
+          <span class="text-xs font-semibold text-slate-300">Danh sách bản vẽ (<span id="queueCount">0</span>)</span>
+          <button id="btnClearQueue" class="text-[11px] text-slate-500 hover:text-red-400 transition-colors">Xoá toàn bộ</button>
+        </div>
+        <div id="queueContainer" class="p-2 overflow-y-auto space-y-2 flex-1">
+          <div class="text-center py-16 text-slate-600 text-xs italic">
+            Chưa có bản vẽ nào. Hãy kéo ảnh vào khung trên.
+          </div>
+        </div>
+      </div>
 
-        const timeout = opts.type === "error" ? 15000 : 10000;
-        setTimeout(() => {
-          if (toast.parentElement) {
-            toast.style.opacity = "0";
-            setTimeout(() => toast.remove(), 250);
-          }
-        }, timeout);
-      }
+    </div>
 
-      async saveFile(blob, defaultName, mimeType) {
-        if (!blob) return alert("Không có dữ liệu file!");
+    <!-- CỘT PHẢI: VIEWER & KẾT QUẢ VĂN BẢN (8 CỘT) -->
+    <div class="col-span-12 lg:col-span-8 flex flex-col gap-4">
 
-        if ("showSaveFilePicker" in window) {
-          try {
-            const ext = defaultName.split(".").pop();
-            const handle = await window.showSaveFilePicker({
-              suggestedName: defaultName,
-              types: [{ description: "Tệp xuất CAD", accept: { [mimeType]: [`.${ext}`] } }]
-            });
-            const writable = await handle.createWritable();
-            await writable.write(blob);
-            await writable.close();
-            return;
-          } catch (err) {
-            if (err.name === "AbortError") return;
-          }
-        }
+      <!-- THANH CÔNG CỤ PREVIEW -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs">
+        <div class="flex items-center gap-4">
+          <label class="flex items-center gap-2 cursor-pointer font-medium">
+            <input type="checkbox" id="toggleOverlay" checked class="w-4 h-4 rounded text-purple-600 focus:ring-purple-500 bg-slate-950 border-slate-700">
+            <span>Hiển thị Lớp Chữ Đè (Overlay)</span>
+          </label>
 
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = defaultName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 2000);
-      }
-    }
+          <div class="flex items-center gap-1.5 pl-3 border-l border-slate-800">
+            <span class="text-slate-400">Màu chữ:</span>
+            <input type="color" id="overlayColor" value="#9333ea" class="w-6 h-6 rounded border-0 bg-transparent cursor-pointer" title="Chọn màu chữ overlay">
+          </div>
+        </div>
 
-    const v28 = new V28NotificationManager();
-
-    // Giả lập đọc ảnh và tạo file thật (jsPDF + JSZip)
-    document.getElementById("btnProcess").onclick = async () => {
-      const files = document.getElementById("fileInput").files;
-      const apiKey = document.getElementById("apiKey").value.trim();
-
-      if (files.length === 0) {
-        alert("Vui lòng chọn ít nhất 1 ảnh bản vẽ!");
-        return;
-      }
-
-      const btn = document.getElementById("btnProcess");
-      btn.disabled = true;
-      btn.innerText = "Đang xử lý...";
-
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        try {
-          // Bắt lỗi nếu thiếu API Key
-          if (!apiKey) {
-            throw new Error("api_key_invalid: Vui lòng nhập API Key hợp lệ!");
-          }
-
-          // Giả lập đọc file ảnh sang Data URL
-          const imgData = await new Promise((resolve) => {
-            const reader = new FileReader();
-            reader.onload = (e) => resolve(e.target.result);
-            reader.readAsDataURL(file);
-          });
-
-          // Lấy kích thước thật của ảnh
-          const imgObj = new Image();
-          await new Promise((resolve) => {
-            imgObj.onload = resolve;
-            imgObj.src = imgData;
-          });
-          const realW = imgObj.naturalWidth || 1200;
-          const realH = imgObj.naturalHeight || 800;
-
-          // Giả lập nhận diện chữ: Ảnh số chẵn coi như có chữ, số lẻ ko có chữ để test
-          const hasText = (i % 2 === 0);
-          const detectedItems = hasText 
-            ? [{ text: "PLC PANEL", x: 100, y: 150 }, { text: "SPARE", x: 200, y: 300 }] 
-            : [];
-
-          // Khởi tạo PDF bằng jsPDF
-          const { jsPDF } = window.jspdf;
-          const doc = new jsPDF({
-            orientation: realW > realH ? "l" : "p",
-            unit: "px",
-            format: [realW, realH]
-          });
-
-          // Vẽ ảnh nền
-          doc.addImage(imgData, "PNG", 0, 0, realW, realH);
-
-          // Vẽ chữ màu tím #9333ea nếu có chữ
-          if (hasText) {
-            doc.setTextColor(147, 51, 234); // Màu tím RGB
-            doc.setFont("Helvetica", "bold");
-            doc.setFontSize(14);
-            detectedItems.forEach(item => {
-              doc.text(item.text, item.x, item.y);
-            });
-          }
-
-          const pdfBlob = doc.output("blob");
-          const txtBlob = new Blob([detectedItems.map(d => d.text).join("\n")], { type: "text/plain;charset=utf-8" });
-          const imgBlob = file;
-
-          // Đóng gói All (ZIP)
-          const zip = new JSZip();
-          zip.file(`${file.name}.pdf`, pdfBlob);
-          zip.file(`${file.name}.txt`, txtBlob);
-          zip.file(file.name, imgBlob);
-          const zipBlob = await zip.generateAsync({ type: "blob" });
-
-          // Bắn thông báo hoàn tất
-          v28.notifyFinished({
-            current: i + 1,
-            total: files.length,
-            fileName: file.name,
-            hasText: hasText,
-            textCount: detectedItems.length,
-            zipBlob: zipBlob,
-            pdfBlob: pdfBlob,
-            txtBlob: txtBlob,
-            imgBlob: imgBlob
-          });
-
-        } catch (err) {
-          console.error("F12 Error Log:", err);
-          v28.notifyError({
-            current: i + 1,
-            total: files.length,
-            fileName: file.name,
-            error: err
-          });
-        }
-      }
-
-      btn.disabled = false;
-      btn.innerText = "Bắt đầu xử lý hàng loạt";
-    };
-  </script>
-</body>
-</html>
+        <div class="flex items-center gap-2">
+          <button id="btnExportSingleTxt" disabled class="bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 px-2.5 py-1.5 rounded flex items-center gap-1 transition-all">
+            <span>Tải .TXT</span>
+          </button>
+          <button id="btnExportTitleBlockTxt" disabled class="bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-200 px-2.5 py-1.5 rounded flex items-center gap-1 transition-all">
+            <span>Tải Khung tên .TXT</span>
+          </button>
+          <button id="btnExportSinglePdf" disabled class="bg-purple-600 hover:bg-purple-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-medium px-3 py-1.5 rounded flex items-center gap-1 shadow transition-all">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></
